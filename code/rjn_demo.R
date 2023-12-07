@@ -1,14 +1,14 @@
-# R CODE FOR PANEL STRUCTURAL VAR ESTIMATION   
-#
-# REFERENCE:                              
-# Pedroni, Peter (2013) "Structural Panel VARs", Econometrics, 1 (2), 180-206.              
-#
-#contact: ppedroni@williams.edu, Special thanks to Jianing Ren
-#
-## user input section
+# ---------------------------------------------------------------------------- #
+#                       Code for ECON 371 Final Project                        #
+#                        Authors: Matthew Wu, Yufeng Wu                        #
+#                             Date: Dec.7th, 2023                              #
+#                                                                              #
+# Acknowledgement: this code is adapted from Jianing Ren's code provided by    #
+# Prof. Pedroni.                                                               #
+# ---------------------------------------------------------------------------- #
 
-working_directory =  "/Users/rjn/OneDrive/Williams/pedroni/r_code_demo" # directory of the source code files and the dataset; outputs will also be stored here
-file_name = "pedroni_ppp.xls" # name of the dataset; intended for xls
+working_directory =  "/Users/dingding/Desktop/ECON 371 Final Project/code/" # directory of the source code files and the dataset; outputs will also be stored here
+file_name = "../data/pedroni_ppp.xls" # name of the dataset; intended for xls
 var_variables = c("lne","lnae") # read variables in order of recursivity if using s-r or l-r id option
 second_stage_variables = c() # column name of secondary regressor(s), if any. Leave as empty string, c(), if no secondary regression 
 panel_identifier = "country" # name of the unique identifier of panel members
@@ -65,8 +65,6 @@ if(!length(shock_label))
 }
 
 ### calculating structural panel svar
-#lagschosenbyrats = rev(c(5,1,13,12,12,13,1,1,13,12,1,3,1,12,1,1,3,6,1,1))
-#cslagchosenbyrats = 1
 realrun = panelsvar(balancedpanel,
                            maxQ = maxIRsteps,
                            maxlag = maxVARlag,
@@ -85,6 +83,7 @@ scndary_analysis_comp = c()
 scndary_analysis_comm = c()
 scndary_analysis_idio = data.frame()
 
+# m is the dimensionality of the matrix
 for (i in 1:m)
 {
   for (j in 1:m)
@@ -120,73 +119,73 @@ write.csv(spreadsheetcomm, "IR_to_common_shock_R.csv")
 write.csv(spreadsheetidio, "IR_to_idiosyncratic_shock_R.csv")
 
 ### secondary analysis
-
-if (length(second_stage_variables))
-{
-  # common set of rhs variables: the mean for each country across the entire time period
-  rhs = dat %>% group_by_at(vars(panel_identifier)) %>% summarize_all(mean) %>% select(all_of(c(second_stage_variables))) # what to do with NA's in taking the mean?
-  lmcomp_kl = lapply(as.data.frame(comp), 
-                     function(x){
-                       a_kl = data.frame(y = x, rhs)
-                       lm(y~.,data = a_kl)
-                     })
-  lmcomm_kl = lapply(as.data.frame(comm),
-                     function(x){
-                       a_kl_bar = data.frame(y = x, rhs)
-                       lm(y~.,data = a_kl_bar)
-                     })
-  lmidio_kl = lapply(as.data.frame(idio),
-                     function(x){
-                       a_kl_tilde = data.frame(y = x, rhs)
-                       lm(y~.,data = a_kl_tilde)
-                     })
-  scndary_analysis_comp = data.frame(t(sapply(lmcomp_kl, coef)), r_sq = sapply(lmcomp_kl, function(x) summary(x)$r.squared))
-  scndary_analysis_comm = data.frame(t(sapply(lmcomm_kl, coef)), r_sq = sapply(lmcomm_kl, function(x) summary(x)$r.squared))
-  scndary_analysis_idio = data.frame(t(sapply(lmidio_kl, coef)), r_sq = sapply(lmidio_kl, function(x) summary(x)$r.squared))
-  
-  write.csv(scndary_analysis_comp,"scndary_analysis_comp.csv")
-  write.csv(scndary_analysis_comm,"scndary_analysis_comm.csv")
-  write.csv(scndary_analysis_idio,"scndary_analysis_idio.csv")
-}
+# if (length(second_stage_variables))
+# {
+#   # common set of rhs variables: the mean for each country across the entire time period
+#   rhs = dat %>% group_by_at(vars(panel_identifier)) %>% summarize_all(mean) %>% select(all_of(c(second_stage_variables))) # what to do with NA's in taking the mean?
+#   lmcomp_kl = lapply(as.data.frame(comp), 
+#                      function(x){
+#                        a_kl = data.frame(y = x, rhs)
+#                        lm(y~.,data = a_kl)
+#                      })
+#   lmcomm_kl = lapply(as.data.frame(comm),
+#                      function(x){
+#                        a_kl_bar = data.frame(y = x, rhs)
+#                        lm(y~.,data = a_kl_bar)
+#                      })
+#   lmidio_kl = lapply(as.data.frame(idio),
+#                      function(x){
+#                        a_kl_tilde = data.frame(y = x, rhs)
+#                        lm(y~.,data = a_kl_tilde)
+#                      })
+#   scndary_analysis_comp = data.frame(t(sapply(lmcomp_kl, coef)), r_sq = sapply(lmcomp_kl, function(x) summary(x)$r.squared))
+#   scndary_analysis_comm = data.frame(t(sapply(lmcomm_kl, coef)), r_sq = sapply(lmcomm_kl, function(x) summary(x)$r.squared))
+#   scndary_analysis_idio = data.frame(t(sapply(lmidio_kl, coef)), r_sq = sapply(lmidio_kl, function(x) summary(x)$r.squared))
+#   
+#   write.csv(scndary_analysis_comp,"scndary_analysis_comp.csv")
+#   write.csv(scndary_analysis_comm,"scndary_analysis_comm.csv")
+#   write.csv(scndary_analysis_idio,"scndary_analysis_idio.csv")
+# }
 
 
 ### plotting the quantile responses
-counter = 1
-compplot = list()
-commplot = list()
-idioplot = list()
-for (i in 1:m)
-{
-  for (j in 1:m)
-  {
-    compplot[[counter]] = 
-      plot_panel_response(realruncomp, pos1 = i, pos2 = j, cum = display_response_in_levels)+
-      geom_hline(yintercept = 0)+
-      labs(title = paste0("Response of ", variable_label[i]," to Composite ", shock_label[j], " Shock"))
-    commplot[[counter]] = 
-      plot_panel_response(realruncommon, pos1 = i, pos2 = j, cum = display_response_in_levels)+
-      geom_hline(yintercept = 0)+
-      labs(title = paste0("Response of ", variable_label[i]," to Common ", shock_label[j], " Shock"))
-    idioplot[[counter]] = 
-      plot_panel_response(realrunidio, pos1 = i, pos2 = j, cum = display_response_in_levels)+
-      geom_hline(yintercept = 0)+
-      labs(title = paste0("Response of ", variable_label[i]," to Idiosyncratic ", shock_label[j], " Shock"))
-    counter = counter + 1
-  }
-}
+# counter = 1
+# compplot = list()
+# commplot = list()
+# idioplot = list()
+# for (i in 1:m)
+# {
+#   for (j in 1:m)
+#   {
+#     compplot[[counter]] = 
+#       plot_panel_response(realruncomp, pos1 = i, pos2 = j, cum = display_response_in_levels)+
+#       geom_hline(yintercept = 0)+
+#       labs(title = paste0("Response of ", variable_label[i]," to Composite ", shock_label[j], " Shock"))
+#     commplot[[counter]] = 
+#       plot_panel_response(realruncommon, pos1 = i, pos2 = j, cum = display_response_in_levels)+
+#       geom_hline(yintercept = 0)+
+#       labs(title = paste0("Response of ", variable_label[i]," to Common ", shock_label[j], " Shock"))
+#     idioplot[[counter]] = 
+#       plot_panel_response(realrunidio, pos1 = i, pos2 = j, cum = display_response_in_levels)+
+#       geom_hline(yintercept = 0)+
+#       labs(title = paste0("Response of ", variable_label[i]," to Idiosyncratic ", shock_label[j], " Shock"))
+#     counter = counter + 1
+#   }
+# }
+# 
+# comppane = do.call("arrangeGrob", c(compplot, nrow = m))
+# ggsave("comppane.png", comppane, width = 7*m, height = 7*(m-1))
+# 
+# commpane = do.call("arrangeGrob", c(commplot, nrow = m))
+# ggsave("commpane.png", commpane, width = 7*m, height = 7*(m-1))
+# 
+# idiopane = do.call("arrangeGrob", c(idioplot, nrow = m))
+# ggsave("idiopane.png", idiopane, width = 7*m, height = 7*(m-1))
 
-comppane = do.call("arrangeGrob", c(compplot, nrow = m))
-ggsave("comppane.png", comppane, width = 7*m, height = 7*(m-1))
 
-commpane = do.call("arrangeGrob", c(commplot, nrow = m))
-ggsave("commpane.png", commpane, width = 7*m, height = 7*(m-1))
-
-idiopane = do.call("arrangeGrob", c(idioplot, nrow = m))
-ggsave("idiopane.png", idiopane, width = 7*m, height = 7*(m-1))
-
-## bootstrap
-if (bootstrap)
-{
+# ------------------------------------ BOOTSTRAP ------------------------------------ #
+if (bootstrap) {
+  # -------- Preparation -------- #
   # pools from which to resample
   epsbarpool = realrun$epsilon_bar_ls
   epstildepool = realrun$indctryepstilde_ls # specific to country
@@ -200,12 +199,15 @@ if (bootstrap)
   comp_list_of_qt = list()
   idio_list_of_qt = list()
   
+  # -------- Boostrap for nreps steps -------- #
   for (j in 1:nreps)
   {
-    print(paste0("now running bootstrap iter: ", j))
+    print(paste0("Running Bootstrap Iter: ", j))
+      
     # things fixed in each nrep
     epsbar_resample = resample(filter_na(epsbarpool), bigt + burnin)
     fakepanel = list()
+    
     # generate the fake panel
     for (i in 1:n)
     {
@@ -231,8 +233,7 @@ if (bootstrap)
     idio_list_of_qt[[j]] = temppanelsvar$idioQuantiles
   }
   
-  # retrieving the results
-  
+  # -------- Retrieve the results from the previous step -------- #
   commConfBandLwr = lapply(1:maxIRsteps, matrix, data = NA, nrow = m, ncol = m)
   commConfBandUpr = lapply(1:maxIRsteps, matrix, data = NA, nrow = m, ncol = m)
   compConfBandLwr = lapply(1:maxIRsteps, matrix, data = NA, nrow = m, ncol = m)

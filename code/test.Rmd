@@ -1,0 +1,136 @@
+---
+title: "test"
+author: "Yufeng Wu"
+date: "2023-12-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# ---------------------------------------------------------------------------- #
+#                       Code for ECON 371 Final Project                        #
+#                        Authors: Matthew Wu, Yufeng Wu                        #
+#                             Date: Dec.7th, 2023                              #
+#                                                                              #
+# Acknowledgement: this code is adapted from Jianing Ren's code provided by    #
+# Prof. Pedroni.                                                               #
+# ---------------------------------------------------------------------------- #
+
+working_directory =  "/Users/dingding/Desktop/ECON 371 Final Project/code/" # directory of the source code files and the dataset; outputs will also be stored here
+file_name = "../data/pedroni_ppp.xls" # name of the dataset; intended for xls
+var_variables = c("lne","lnae") # read variables in order of recursivity if using s-r or l-r id option
+second_stage_variables = c() # column name of secondary regressor(s), if any. Leave as empty string, c(), if no secondary regression 
+panel_identifier = "country" # name of the unique identifier of panel members
+maxVARlag = 10 # the maximum number of lags to be considered in VAR estimation
+maxIRsteps = 20 # the value of Q+1, i.e., maximum impulse response horizon
+Ione = T # use T if var_variables are in I(1) unit root form (i.e., need to difference); F otherwise
+display_response_in_levels = Ione # default value is same as Ione; can overwrite with T/F
+structural_id_form = "longrun" # either "longrun" or "shortrun", for Cholesky decomposition of the long run or short run covariance matrix
+variable_label = c("lne", "lnae") # variable labels for the graphs. if no input, default as "variable1, variable2, ..."
+shock_label = c("Real","Nominal") # shock labels for the graphs. if no input, default as "shock1, shock2, ..."
+bootstrap = T # whether bootstrap intervals should be estimated
+  nreps = 100 # number of bootstrap iterations
+  bootstrap_quantile = 0.5 # which quantile point estimate would you like to see confidence bands around?
+  conflevel = c(0.1, 0.9) # desired confidence level for bootstrap
+  burnin = 100 # how many iterations before bootstrap kicks in
+
+
+### perform any data manipulation here, such as taking the log or calculating the nominal exchange rate
+setwd(working_directory)
+source("linearFunctions.R")
+source("genericHelpers.R")
+dat = read_xls(file_name)
+#dat = dat[complete.cases(dat),] # remove the three NAs in the end
+dat = dat %>% mutate(lne = log(ae*cpi/uswpi),
+                     lnae = log(ae))
+
+#########################################################################################################
+
+## main source code; do not change
+### subsetting data
+id_string = unique(dat[[panel_identifier]])
+balancedpanel = suppressWarnings(dat %>% 
+                                   select(all_of(c(var_variables, panel_identifier))) %>% 
+                                   mutate(across(!panel_identifier,as.numeric)))
+balancedpanel = split(balancedpanel, balancedpanel[,panel_identifier])
+if (Ione)
+{
+  balancedpanel = lapply(balancedpanel, 
+                         function(x) as.data.frame(diff(as.matrix(select(x, -panel_identifier)))))
+}
+
+### key variable declaration
+n = length(balancedpanel)
+m = ncol(balancedpanel[[1]])
+bigt = nrow(balancedpanel[[1]]) # will change for unbalanced panel
+if(!length(variable_label))
+{
+  variable_label = paste0("variable", 1:m)
+}
+
+if(!length(shock_label))
+{
+  shock_label = paste0("shock", 1:m)
+}
+
+### calculating structural panel svar
+realrun = panelsvar(balancedpanel,
+                           maxQ = maxIRsteps,
+                           maxlag = maxVARlag,
+                           type = structural_id_form,
+                           autolag = T)
+
+realruncommon = realrun$common
+realrunidio = realrun$idio
+realruncomp = realrun$composite
+
+### writing the three responses
+spreadsheetcomp = c()
+spreadsheetcomm = c()
+spreadsheetidio = c()
+scndary_analysis_comp = c()
+scndary_analysis_comm = c()
+scndary_analysis_idio = data.frame()
+
+# m is the dimensionality of the matrix
+for (i in 1:m)
+{
+  for (j in 1:m)
+  {
+    name = paste0("IR",i,j,"_",1:maxIRsteps)
+    tempcomp = t(sapply(realruncomp, function(x) sapply(x, function(y) y[i,j]))) # all countries' ijth position for all Q
+    tempcomm = t(sapply(realruncommon, function(x) sapply(x, function(y) y[i,j])))
+    tempidio = t(sapply(realrunidio, function(x) sapply(x, function(y) y[i,j])))
+    
+    if (display_response_in_levels)
+    {
+      tempcomp = t(apply(tempcomp, 1, cumsum))
+      tempcomm = t(apply(tempcomm, 1, cumsum))
+      tempidio = t(apply(tempidio, 1, cumsum))
+    }
+   
+    colnames(tempcomp) = name
+    colnames(tempcomm) = name
+    colnames(tempidio) = name
+    
+    spreadsheetcomp = cbind(spreadsheetcomp, tempcomp)
+    spreadsheetcomm = cbind(spreadsheetcomm, tempcomm)
+    spreadsheetidio = cbind(spreadsheetidio, tempidio)
+    
+    rownames(spreadsheetcomm) = id_string
+    rownames(spreadsheetcomm) = id_string
+    rownames(spreadsheetidio) = id_string
+  }
+}
+
+# write.csv(spreadsheetcomp, "IR_to_composite_shock_R.csv")
+# write.csv(spreadsheetcomm, "IR_to_common_shock_R.csv")
+# write.csv(spreadsheetidio, "IR_to_idiosyncratic_shock_R.csv")
+```
+```{r}
+realrun$composite$`112`
+```
+
