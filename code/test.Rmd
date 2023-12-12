@@ -130,7 +130,8 @@ for (i in 1:m)
 # write.csv(spreadsheetcomm, "IR_to_common_shock_R.csv")
 # write.csv(spreadsheetidio, "IR_to_idiosyncratic_shock_R.csv")
 ```
+
 ```{r}
-realrun$composite$`112`
+balancedpanel$`112`
 ```
 

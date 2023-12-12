@@ -186,8 +186,10 @@ write.csv(spreadsheetidio, "IR_to_idiosyncratic_shock_R.csv")
 # ------------------------------------ BOOTSTRAP ------------------------------------ #
 if (bootstrap) {
   # -------- Preparation -------- #
-  # pools from which to resample
+  # construct pools from which to resample:
+  # pool of common shocks
   epsbarpool = realrun$epsilon_bar_ls
+  # pool of idiosyncratic shocks
   epstildepool = realrun$indctryepstilde_ls # specific to country
   
   # constants shared across bootstraps
@@ -209,8 +211,8 @@ if (bootstrap) {
     fakepanel = list()
     
     # generate the fake panel
-    for (i in 1:n)
-    {
+    # n is the length of time series
+    for (i in 1:n) {
       constant_i = lapply(realrun$indctrystructures[[i]]$a_l,
                           function(x) {x %*% solve(realrun$indctrystructures[[i]]$a_0) %*% indctryconstants[[1]]}) # constant from composite
       constant_i = Reduce("+", constant_i)
@@ -220,6 +222,7 @@ if (bootstrap) {
         matrix(constant_i, nrow = bigt + burnin, ncol = m, byrow = T)# first q will be missing
       fakepanel[[i]] = as.data.frame(tail(indctrydeltaz, n = bigt)) # take the last 245 of this
     }
+    
     # estimate on the fake panel
     temppanelsvar = panelsvarbtsp(panel_list = fakepanel,
                                   maxQ = maxIRsteps,
@@ -311,3 +314,166 @@ if (bootstrap) {
   ggsave("compbootstrappane.png", do.call("arrangeGrob", c(compbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
   ggsave("idiobootstrappane.png", do.call("arrangeGrob", c(idiobootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
 }
+
+
+
+
+
+
+
+
+# ------------------------------------ BLOCK BOOTSTRAP (OUR METHOD) ------------------------------------ #
+# method 1: same list of random time blocks for every country, use all countries.
+# method 2: same list of random time blocks for every country, randomly choose x% of the countries with/without replacement (?)
+# method 3: use some clustering algorithm to cluster countries into several groups. now we do the same as method 2 
+#           but instead we sample x% of the country groups each time with/without (?) replacement.
+# future work: how to bootstrap for unbalanced data
+if (block_bootstrap) {
+    # Prepare data frames to save quantile (default at 50%, i.e., median) results later
+    comm_qts = list()
+    comp_qts = list()
+    idio_qts = list()
+    
+    # [USER INPUT] choose the user's preferred block size
+    block_size = 10
+    
+    for (bootstrap_iter in 1:nreps) {
+        
+    }
+    # for i in range(1, 1000):
+        # Choose a block size： block_size
+        # for each country: GNP: a1, a2, a3, ..., a100; a1-10, a2-11, ... 
+            # divide data into blocks
+            # sample blocks with replacements and then stitch them together in order
+            
+            
+            # 1) a1-10, a1-10,              a2-11, a5-16
+            # 2) a1-10, a1-10, a1-10, a1-10
+            # 3) a1-10, a1-10, a2-11, a5-16
+    
+            # 1) a2-10, a2-10, a2-11, a5-16
+            # 2) a2-10, a2-10, a2-11, a5-16
+    
+            
+                t=0, t=1, t=2, ...
+        china:  12.3  12.5 12.7
+        usa:    ..    ..
+        india:  
+    
+        # use the new dataframe to do PSVAR
+    
+    # -------- Boostrap for nreps steps -------- #
+    for (j in 1:nreps)
+    {
+        print(paste0("Running Bootstrap Iter: ", j))
+        
+        # things fixed in each nrep
+        epsbar_resample = resample(filter_na(epsbarpool), bigt + burnin)
+        fakepanel = list()
+        
+        # generate the fake panel
+        # n is the length of time series
+        for (i in 1:n) {
+            constant_i = lapply(realrun$indctrystructures[[i]]$a_l,
+                                function(x) {x %*% solve(realrun$indctrystructures[[i]]$a_0) %*% indctryconstants[[1]]}) # constant from composite
+            constant_i = Reduce("+", constant_i)
+            epstilde_resample = resample(filter_na(epstildepool[[i]]), bigt + burnin)
+            indctrydeltaz = a_times_eps(a = realruncommon[[i]], eps = epsbar_resample, simplify = T) +
+                a_times_eps(a = realruncomp[[i]], eps = epstilde_resample, simplify = T) +
+                matrix(constant_i, nrow = bigt + burnin, ncol = m, byrow = T)# first q will be missing
+            fakepanel[[i]] = as.data.frame(tail(indctrydeltaz, n = bigt)) # take the last 245 of this
+        }
+        
+        # estimate on the fake panel
+        temppanelsvar = panelsvarbtsp(panel_list = fakepanel,
+                                      maxQ = maxIRsteps,
+                                      quantile = bootstrap_quantile,
+                                      lagschosen = realrun$lagschosen,
+                                      cslagschosen = realrun$cslagschosen)
+        #print(fakepanel[[1]][1,1])
+        #print(temppanelsvar$composite[[1]][[1]])
+        comm_list_of_qt[[j]] = temppanelsvar$commQuantiles # these are length-nrep lists, each is a list of Q m*m matrix of the median (or desired quantiles) 
+        comp_list_of_qt[[j]] = temppanelsvar$compQuantiles
+        idio_list_of_qt[[j]] = temppanelsvar$idioQuantiles
+    }
+    
+    # -------- Retrieve the results from the previous step -------- #
+    commConfBandLwr = lapply(1:maxIRsteps, matrix, data = NA, nrow = m, ncol = m)
+    commConfBandUpr = lapply(1:maxIRsteps, matrix, data = NA, nrow = m, ncol = m)
+    compConfBandLwr = lapply(1:maxIRsteps, matrix, data = NA, nrow = m, ncol = m)
+    compConfBandUpr = lapply(1:maxIRsteps, matrix, data = NA, nrow = m, ncol = m)
+    idioConfBandLwr = lapply(1:maxIRsteps, matrix, data = NA, nrow = m, ncol = m)
+    idioConfBandUpr = lapply(1:maxIRsteps, matrix, data = NA, nrow = m, ncol = m)
+    
+    for(i in 1:m)
+    {
+        for(j in 1:m)
+        {
+            idio_conf_band_pos = get_shocks(idio_list_of_qt, i, j, cum = F, qt = conflevel)
+            comp_conf_band_pos = get_shocks(comp_list_of_qt, i, j, cum = F, qt = conflevel)
+            comm_conf_band_pos = get_shocks(comm_list_of_qt, i, j, cum = F, qt = conflevel)
+            for(k in 1:maxIRsteps)
+            {
+                commConfBandLwr[[k]][i,j] = comm_conf_band_pos[1,k]
+                commConfBandUpr[[k]][i,j] = comm_conf_band_pos[2,k]
+                compConfBandLwr[[k]][i,j] = comp_conf_band_pos[1,k]
+                compConfBandUpr[[k]][i,j] = comp_conf_band_pos[2,k]
+                idioConfBandLwr[[k]][i,j] = idio_conf_band_pos[1,k]
+                idioConfBandUpr[[k]][i,j] = idio_conf_band_pos[2,k]
+            }
+        }
+    }
+    
+    # plotting the bootstrap
+    commbootstrappane = list()
+    compbootstrappane = list()
+    idiobootstrappane = list()
+    counter = 1
+    
+    plotcommbootstrap = function(i,j)
+    {
+        ggplot()+
+            geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realruncommon, pos1 = i, pos2 = j, cum = T), color = paste0("Point Estimate of ", bootstrap_quantile*100, "-th Percentile")))+
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(commConfBandLwr, i, j), color = paste0(conflevel[1]*100, "-th Confidence Band")))+
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(commConfBandUpr, i, j), color = paste0(conflevel[2]*100, "-th Confidence Band")))+
+            scale_color_manual(name = "type", values = c("red","red","black"))+
+            labs(x = "Period", y = "Impulse Response",
+                 title = paste0("Bootstrap of Response of ", variable_label[i], " to Common ", shock_label[j], " Shock"))
+    }
+    
+    plotcompbootstrap = function(i,j)
+    {
+        ggplot()+
+            geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realruncomp, pos1 = i, pos2 = j, cum = T), color = paste0("Point Estimate of ", bootstrap_quantile*100, "-th Percentile")))+
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(compConfBandLwr, i, j), color = paste0(conflevel[1]*100, "-th Confidence Band")))+
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(compConfBandUpr, i, j), color = paste0(conflevel[2]*100, "-th Confidence Band")))+
+            scale_color_manual(name = "type", values = c("red","red","black"))+
+            labs(x = "Period", y = "Impulse Response", title = paste0("Bootstrap of Response of ", variable_label[i], " to Composite ", shock_label[j], " Shock"))
+    }
+    
+    plotidiobootstrap = function(i,j)
+    {
+        ggplot()+
+            geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realrunidio, pos1 = i, pos2 = j, cum = T), color = paste0("Point Estimate of ", bootstrap_quantile*100, "-th Percentile")))+
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(idioConfBandLwr, i, j), color = paste0(conflevel[1]*100, "-th Confidence Band")))+
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(idioConfBandUpr, i, j), color = paste0(conflevel[2]*100, "-th Confidence Band")))+
+            scale_color_manual(name = "type", values = c("red","red","black"))+
+            labs(x = "Period", y = "Impulse Response", title = paste0("Bootstrap of Response of ", variable_label[i], " to Idiosyncratic ", shock_label[j], " Shock"))
+    }
+    for (i in 1:m)
+    {
+        for (j in 1:m)
+        {
+            commbootstrappane[[counter]] = plotcommbootstrap(i,j)
+            compbootstrappane[[counter]] = plotcompbootstrap(i,j)
+            idiobootstrappane[[counter]] = plotidiobootstrap(i,j)
+            counter = counter+1
+        }
+    }
+    
+    ggsave("commbootstrappane.png", do.call("arrangeGrob", c(commbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+    ggsave("compbootstrappane.png", do.call("arrangeGrob", c(compbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+    ggsave("idiobootstrappane.png", do.call("arrangeGrob", c(idiobootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+}
+
+
