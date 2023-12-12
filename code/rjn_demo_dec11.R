@@ -7,8 +7,8 @@
 # Prof. Pedroni.                                                               #
 # ---------------------------------------------------------------------------- #
 
-working_directory =  "/Users/dingding/Desktop/ECON 371 Final Project/code/" # directory of the source code files and the dataset; outputs will also be stored here
-file_name = "../data/pedroni_ppp.xls" # name of the dataset; intended for xls
+working_directory =  "/Users/matthewwu/desktop/R_code_demo_psvar_pedroni2013" # directory of the source code files and the dataset; outputs will also be stored here
+file_name = "pedroni_ppp.xls" # name of the dataset; intended for xls
 var_variables = c("lne","lnae") # read variables in order of recursivity if using s-r or l-r id option
 second_stage_variables = c() # column name of secondary regressor(s), if any. Leave as empty string, c(), if no secondary regression 
 panel_identifier = "country" # name of the unique identifier of panel members
@@ -19,12 +19,13 @@ display_response_in_levels = Ione # default value is same as Ione; can overwrite
 structural_id_form = "longrun" # either "longrun" or "shortrun", for Cholesky decomposition of the long run or short run covariance matrix
 variable_label = c("lne", "lnae") # variable labels for the graphs. if no input, default as "variable1, variable2, ..."
 shock_label = c("Real","Nominal") # shock labels for the graphs. if no input, default as "shock1, shock2, ..."
-bootstrap = T # whether bootstrap intervals should be estimated
-  nreps = 100 # number of bootstrap iterations
+bootstrap = F # whether bootstrap intervals should be estimated
+  nreps = 20 # number of bootstrap iterations
   bootstrap_quantile = 0.5 # which quantile point estimate would you like to see confidence bands around?
   conflevel = c(0.1, 0.9) # desired confidence level for bootstrap
   burnin = 100 # how many iterations before bootstrap kicks in
 
+block_bootstrap = T
 
 ### perform any data manipulation here, such as taking the log or calculating the nominal exchange rate
 setwd(working_directory)
@@ -344,6 +345,7 @@ if (block_bootstrap) {
             # block_bootstrapped_balancedpanel$country = block_sample(balancedpanel$country, chosen_blocks)
         # now we have the bootstrapped data
     }
+    # use the new dataframe to do PSVAR
     
     
     
@@ -354,9 +356,88 @@ if (block_bootstrap) {
             # sample blocks with replacements and then stitch them together in order
             
     
-        # use the new dataframe to do PSVAR
-    
+     
     # -------- Boostrap for nreps steps -------- #
+    
+    
+    
+###################################IMPLEMENTATION OF METHOD 1 ###################################
+    
+    # ------------------------------------ BLOCK BOOTSTRAP (OUR METHOD) ------------------------------------ #
+    if (block_bootstrap) {
+      # Define the block size
+      block_size = 10 # [USER INPUT] choose the user's preferred block size
+      
+      # Initialize lists to store the bootstrapped quantiles
+      comm_qts = list()
+      comp_qts = list()
+      idio_qts = list()
+      
+      # Bootstrap for nreps iterations
+      for (bootstrap_iter in 1:nreps) {
+        # Initialize a list to store bootstrapped panels
+        bootstrapped_panel = list()
+        
+        # Calculate the total number of blocks needed
+        num_blocks = ceiling(bigt / block_size)
+        
+        # Sample start points for blocks (with replacement)
+        sampled_starts = sample(1:bigt - block_size, num_blocks, replace = TRUE)
+        
+        # Sample blocks for each country
+        for (country in names(balancedpanel)) {
+          # Create the bootstrapped sample for each country
+          # Loop over each start point in the sampled_starts list
+          bootstrapped_data = do.call(rbind, lapply(sampled_starts, function(start) {
+            # Calculate the end point of the block. The block starts at 'start' and extends up to 'block_size - 1' points ahead.
+            end = min(start + block_size - 1, bigt)
+            
+            # Check if the block extends beyond the end of the time series.
+            ##if (end < start + block_size - 1) {
+              # If the block extends beyond the end of the time series, we perform a wrap-around.
+              # First, extract the part of the block that lies within the original data range.
+            ##part1 = balancedpanel[[country]][start:end, ]
+              # Then, extract the remaining part from the beginning of the time series to complete the block.
+            ##part2 = balancedpanel[[country]][1:(block_size - (end - start + 1)), ]
+              # Combine these two parts to create a full block.
+            ##return(rbind(part1, part2))
+            ##} else {
+              # If the block does not extend beyond the end of the time series, simply extract the block from 'start' to 'end'.
+              return(balancedpanel[[country]][start:end, ])
+            ##}
+          }))
+          
+          # Store the bootstrapped data for each country
+          bootstrapped_panel[[country]] = bootstrapped_data
+        }
+        
+        # Perform panel SVAR on the bootstrapped panel 
+        bootstrapped_svar = panelsvar(bootstrapped_panel,
+                                      maxQ = maxIRsteps,
+                                      maxlag = maxVARlag,
+                                      type = structural_id_form,
+                                      autolag = T)
+        # Store the quantiles from bootstrapped SVAR
+        comm_qts[[bootstrap_iter]] = bootstrapped_svar$commQuantiles
+        print("DEBUGGING FOR COMM_QTS \n")
+        print(bootstrapped_svar$commQuantiles) 
+        print("################################################")
+        comp_qts[[bootstrap_iter]] = bootstrapped_svar$compQuantiles
+        idio_qts[[bootstrap_iter]] = bootstrapped_svar$idioQuantiles }
+      
+      # Additional code to process and visualize the bootstrapped results...
+      # (similar to what you have done in the regular bootstrap section)
+    }
+    
+    
+    #### TEST CASE NEEDED:
+    
+    
+################################### END OF METHOD 1 ###################################
+    
+    
+    
+    
     for (j in 1:nreps)
     {
         print(paste0("Running Bootstrap Iter: ", j))
@@ -385,7 +466,8 @@ if (block_bootstrap) {
                                       lagschosen = realrun$lagschosen,
                                       cslagschosen = realrun$cslagschosen)
         #print(fakepanel[[1]][1,1])
-        #print(temppanelsvar$composite[[1]][[1]])
+        #print(temppanelsvar$composite[[1]][[1]]).
+        #### TEST RJN ###### CROSSCHECK 
         comm_list_of_qt[[j]] = temppanelsvar$commQuantiles # these are length-nrep lists, each is a list of Q m*m matrix of the median (or desired quantiles) 
         comp_list_of_qt[[j]] = temppanelsvar$compQuantiles
         idio_list_of_qt[[j]] = temppanelsvar$idioQuantiles
@@ -418,56 +500,56 @@ if (block_bootstrap) {
         }
     }
     
-    # plotting the bootstrap
-    commbootstrappane = list()
-    compbootstrappane = list()
-    idiobootstrappane = list()
-    counter = 1
-    
-    plotcommbootstrap = function(i,j)
-    {
-        ggplot()+
-            geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realruncommon, pos1 = i, pos2 = j, cum = T), color = paste0("Point Estimate of ", bootstrap_quantile*100, "-th Percentile")))+
-            geom_line(aes(x = 1:maxIRsteps, y = get_al(commConfBandLwr, i, j), color = paste0(conflevel[1]*100, "-th Confidence Band")))+
-            geom_line(aes(x = 1:maxIRsteps, y = get_al(commConfBandUpr, i, j), color = paste0(conflevel[2]*100, "-th Confidence Band")))+
-            scale_color_manual(name = "type", values = c("red","red","black"))+
-            labs(x = "Period", y = "Impulse Response",
-                 title = paste0("Bootstrap of Response of ", variable_label[i], " to Common ", shock_label[j], " Shock"))
-    }
-    
-    plotcompbootstrap = function(i,j)
-    {
-        ggplot()+
-            geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realruncomp, pos1 = i, pos2 = j, cum = T), color = paste0("Point Estimate of ", bootstrap_quantile*100, "-th Percentile")))+
-            geom_line(aes(x = 1:maxIRsteps, y = get_al(compConfBandLwr, i, j), color = paste0(conflevel[1]*100, "-th Confidence Band")))+
-            geom_line(aes(x = 1:maxIRsteps, y = get_al(compConfBandUpr, i, j), color = paste0(conflevel[2]*100, "-th Confidence Band")))+
-            scale_color_manual(name = "type", values = c("red","red","black"))+
-            labs(x = "Period", y = "Impulse Response", title = paste0("Bootstrap of Response of ", variable_label[i], " to Composite ", shock_label[j], " Shock"))
-    }
-    
-    plotidiobootstrap = function(i,j)
-    {
-        ggplot()+
-            geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realrunidio, pos1 = i, pos2 = j, cum = T), color = paste0("Point Estimate of ", bootstrap_quantile*100, "-th Percentile")))+
-            geom_line(aes(x = 1:maxIRsteps, y = get_al(idioConfBandLwr, i, j), color = paste0(conflevel[1]*100, "-th Confidence Band")))+
-            geom_line(aes(x = 1:maxIRsteps, y = get_al(idioConfBandUpr, i, j), color = paste0(conflevel[2]*100, "-th Confidence Band")))+
-            scale_color_manual(name = "type", values = c("red","red","black"))+
-            labs(x = "Period", y = "Impulse Response", title = paste0("Bootstrap of Response of ", variable_label[i], " to Idiosyncratic ", shock_label[j], " Shock"))
-    }
-    for (i in 1:m)
-    {
-        for (j in 1:m)
-        {
-            commbootstrappane[[counter]] = plotcommbootstrap(i,j)
-            compbootstrappane[[counter]] = plotcompbootstrap(i,j)
-            idiobootstrappane[[counter]] = plotidiobootstrap(i,j)
-            counter = counter+1
-        }
-    }
-    
-    ggsave("commbootstrappane.png", do.call("arrangeGrob", c(commbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
-    ggsave("compbootstrappane.png", do.call("arrangeGrob", c(compbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
-    ggsave("idiobootstrappane.png", do.call("arrangeGrob", c(idiobootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
-}
-
-
+#     # plotting the bootstrap
+#     commbootstrappane = list()
+#     compbootstrappane = list()
+#     idiobootstrappane = list()
+#     counter = 1
+#     
+#     plotcommbootstrap = function(i,j)
+#     {
+#         ggplot()+
+#             geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realruncommon, pos1 = i, pos2 = j, cum = T), color = paste0("Point Estimate of ", bootstrap_quantile*100, "-th Percentile")))+
+#             geom_line(aes(x = 1:maxIRsteps, y = get_al(commConfBandLwr, i, j), color = paste0(conflevel[1]*100, "-th Confidence Band")))+
+#             geom_line(aes(x = 1:maxIRsteps, y = get_al(commConfBandUpr, i, j), color = paste0(conflevel[2]*100, "-th Confidence Band")))+
+#             scale_color_manual(name = "type", values = c("red","red","black"))+
+#             labs(x = "Period", y = "Impulse Response",
+#                  title = paste0("Bootstrap of Response of ", variable_label[i], " to Common ", shock_label[j], " Shock"))
+#     }
+#     
+#     plotcompbootstrap = function(i,j)
+#     {
+#         ggplot()+
+#             geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realruncomp, pos1 = i, pos2 = j, cum = T), color = paste0("Point Estimate of ", bootstrap_quantile*100, "-th Percentile")))+
+#             geom_line(aes(x = 1:maxIRsteps, y = get_al(compConfBandLwr, i, j), color = paste0(conflevel[1]*100, "-th Confidence Band")))+
+#             geom_line(aes(x = 1:maxIRsteps, y = get_al(compConfBandUpr, i, j), color = paste0(conflevel[2]*100, "-th Confidence Band")))+
+#             scale_color_manual(name = "type", values = c("red","red","black"))+
+#             labs(x = "Period", y = "Impulse Response", title = paste0("Bootstrap of Response of ", variable_label[i], " to Composite ", shock_label[j], " Shock"))
+#     }
+#     
+#     plotidiobootstrap = function(i,j)
+#     {
+#         ggplot()+
+#             geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realrunidio, pos1 = i, pos2 = j, cum = T), color = paste0("Point Estimate of ", bootstrap_quantile*100, "-th Percentile")))+
+#             geom_line(aes(x = 1:maxIRsteps, y = get_al(idioConfBandLwr, i, j), color = paste0(conflevel[1]*100, "-th Confidence Band")))+
+#             geom_line(aes(x = 1:maxIRsteps, y = get_al(idioConfBandUpr, i, j), color = paste0(conflevel[2]*100, "-th Confidence Band")))+
+#             scale_color_manual(name = "type", values = c("red","red","black"))+
+#             labs(x = "Period", y = "Impulse Response", title = paste0("Bootstrap of Response of ", variable_label[i], " to Idiosyncratic ", shock_label[j], " Shock"))
+#     }
+#     for (i in 1:m)
+#     {
+#         for (j in 1:m)
+#         {
+#             commbootstrappane[[counter]] = plotcommbootstrap(i,j)
+#             compbootstrappane[[counter]] = plotcompbootstrap(i,j)
+#             idiobootstrappane[[counter]] = plotidiobootstrap(i,j)
+#             counter = counter+1
+#         }
+#     }
+#     
+#     ggsave("commbootstrappane.png", do.call("arrangeGrob", c(commbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+#     ggsave("compbootstrappane.png", do.call("arrangeGrob", c(compbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+#     ggsave("idiobootstrappane.png", do.call("arrangeGrob", c(idiobootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+# }
+# 
+# 
