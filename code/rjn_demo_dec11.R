@@ -16,17 +16,17 @@ var_variables = c("lne","lnae") # read variables in order of recursivity if usin
 second_stage_variables = c() # column name of secondary regressor(s), if any. Leave as empty string, c(), if no secondary regression 
 panel_identifier = "country" # name of the unique identifier of panel members
 maxVARlag = 10 # the maximum number of lags to be considered in VAR estimation
-maxIRsteps = 16 # the value of Q+1, i.e., maximum impulse response horizon
+maxIRsteps = 20 # the value of Q+1, i.e., maximum impulse response horizon
 Ione = T # use T if var_variables are in I(1) unit root form (i.e., need to difference); F otherwise
 display_response_in_levels = Ione # default value is same as Ione; can overwrite with T/F
 structural_id_form = "longrun" # either "longrun" or "shortrun", for Cholesky decomposition of the long run or short run covariance matrix
 variable_label = c("lne", "lnae") # variable labels for the graphs. if no input, default as "variable1, variable2, ..."
 shock_label = c("Real","Nominal") # shock labels for the graphs. if no input, default as "shock1, shock2, ..."
 bootstrap = T # whether bootstrap intervals should be estimated
-  nreps = 5 # number of bootstrap iterations
+  nreps = 100 # number of bootstrap iterations
   bootstrap_quantile = 0.5 # which quantile point estimate would you like to see confidence bands around?
   conflevel = c(0.1, 0.9) # desired confidence level for bootstrap
-  burnin = 5 # how many iterations before bootstrap kicks in
+  burnin = 10 # how many iterations before bootstrap kicks in
 
 block_bootstrap = T
 
@@ -205,9 +205,9 @@ if (bootstrap) {
   }
 
   ###### PLOTTING THE BOOTSTRAP RESULTS #####
-  commbootstrappane = list()
-  compbootstrappane = list()
-  idiobootstrappane = list()
+  OUR_commbootstrappane = list()
+  OUR_compbootstrappane = list()
+  OUR_idiobootstrappane = list()
   counter = 1
 
   plotcommbootstrap = function(i,j)
@@ -251,9 +251,9 @@ if (bootstrap) {
     }
   }
 
-  ggsave("commbootstrappane.png", do.call("arrangeGrob", c(commbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
-  ggsave("compbootstrappane.png", do.call("arrangeGrob", c(compbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
-  ggsave("idiobootstrappane.png", do.call("arrangeGrob", c(idiobootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+  # ggsave("commbootstrappane.png", do.call("arrangeGrob", c(commbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+  # ggsave("compbootstrappane.png", do.call("arrangeGrob", c(compbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+  # ggsave("idiobootstrappane.png", do.call("arrangeGrob", c(idiobootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
 }
 
 
@@ -270,7 +270,7 @@ if (bootstrap) {
 
 if (block_bootstrap) {
     # Define the block size (allow user input or default to 10)
-    block_size <- 10 # Replace this with user input mechanism if required
+    block_size <- 30 # Replace this with user input mechanism if required
     
     # Initialize lists to store the bootstrapped quantiles
     comm_qts <- vector("list", nreps)
@@ -363,60 +363,115 @@ if (block_bootstrap) {
     
     # ----- Get 10th and 90th percentile across bootstrap_iters ----- #
     
+    # Calculate the 10th and 90th percentiles for each quantile matrix
+    final_comm_qts <- array(dim = c(maxIRsteps, 2, 2, 2))
+    final_comp_qts <- array(dim = c(maxIRsteps, 2, 2, 2))
+    final_idio_qts <- array(dim = c(maxIRsteps, 2, 2, 2))
+    
+    for (time in 1:maxIRsteps) {
+        for (i in 1:2) {
+            for (j in 1:2) {
+                # Extract all bootstrap values for each element of the matrix
+                bootstrap_values_comm <- sapply(1:nreps, function(iter) comm_qts[[iter]][[time]][i,j])
+                bootstrap_values_comp <- sapply(1:nreps, function(iter) comp_qts[[iter]][[time]][i,j])
+                bootstrap_values_idio <- sapply(1:nreps, function(iter) idio_qts[[iter]][[time]][i,j])
+                
+                # Compute 10th and 90th percentiles
+                final_comm_qts[time, i, j, 1] <- quantile(bootstrap_values_comm, probs = 0.1)
+                final_comm_qts[time, i, j, 2] <- quantile(bootstrap_values_comm, probs = 0.9)
+                
+                final_comp_qts[time, i, j, 1] <- quantile(bootstrap_values_comp, probs = 0.1)
+                final_comp_qts[time, i, j, 2] <- quantile(bootstrap_values_comp, probs = 0.9)
+                
+                final_idio_qts[time, i, j, 1] <- quantile(bootstrap_values_idio, probs = 0.1)
+                final_idio_qts[time, i, j, 2] <- quantile(bootstrap_values_idio, probs = 0.9)
+            }
+        }
+    }
     
     
     
-    ###### PLOTTING THE BOOTSTRAP RESULTS #####
-    commbootstrappane = list()
-    compbootstrappane = list()
-    idiobootstrappane = list()
+    # Calculate the 10th and 90th percentiles for each matrix
+    calculate_percentiles <- function(bootstrap_results, num_steps) {
+        percentile_10 <- array(dim = c(2, 2, num_steps))
+        percentile_90 <- array(dim = c(2, 2, num_steps))
+        
+        for (i in 1:2) {
+            for (j in 1:2) {
+                for (t in 1:num_steps) {
+                    all_values <- sapply(bootstrap_results, function(boot_iter) boot_iter[[t]][i, j])
+                    percentile_10[i, j, t] <- quantile(all_values, probs = 0.1)
+                    percentile_90[i, j, t] <- quantile(all_values, probs = 0.9)
+                }
+            }
+        }
+        
+        list(percentile_10 = percentile_10, percentile_90 = percentile_90)
+    }
+    
+    # Apply the function to bootstrap results
+    comm_percentiles <- calculate_percentiles(comm_qts, maxIRsteps)
+    comp_percentiles <- calculate_percentiles(comp_qts, maxIRsteps)
+    idio_percentiles <- calculate_percentiles(idio_qts, maxIRsteps)
+    
+    # Extract the 10th and 90th percentiles
+    comm_10th_percentile <- comm_percentiles$percentile_10
+    comm_90th_percentile <- comm_percentiles$percentile_90
+    comp_10th_percentile <- comp_percentiles$percentile_10
+    comp_90th_percentile <- comp_percentiles$percentile_90
+    idio_10th_percentile <- idio_percentiles$percentile_10
+    idio_90th_percentile <- idio_percentiles$percentile_90
+    
+    # Modify plotcommbootstrap function to include 10th and 90th percentile lines
+    OUR_plotcommbootstrap <- function(i, j) {
+        ggplot() +
+            geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realruncommon, pos1 = i, pos2 = j, cum = TRUE), color = "Point Estimate")) +
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(commConfBandLwr, i, j), color = "Lower Confidence Band")) +
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(commConfBandUpr, i, j), color = "Upper Confidence Band")) +
+            geom_line(aes(x = 1:maxIRsteps, y = comm_10th_percentile[i, j, 1:maxIRsteps], color = "10th Percentile")) +
+            geom_line(aes(x = 1:maxIRsteps, y = comm_90th_percentile[i, j, 1:maxIRsteps], color = "90th Percentile")) +
+            scale_color_manual(values = c("black", "red", "purple", "blue", "green")) +
+            labs(x = "Period", y = "Impulse Response", title = paste0("Bootstrap of Response of ", variable_label[i], " to Common ", shock_label[j], " Shock"))
+    }
+    
+    # Modify plotcompbootstrap function to include 10th and 90th percentile lines
+    OUR_plotcompbootstrap <- function(i, j) {
+        ggplot() +
+            geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realruncomp, pos1 = i, pos2 = j, cum = TRUE), color = "Point Estimate")) +
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(compConfBandLwr, i, j), color = "Lower Confidence Band")) +
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(compConfBandUpr, i, j), color = "Upper Confidence Band")) +
+            geom_line(aes(x = 1:maxIRsteps, y = comp_10th_percentile[i, j, 1:maxIRsteps], color = "10th Percentile")) +
+            geom_line(aes(x = 1:maxIRsteps, y = comp_90th_percentile[i, j, 1:maxIRsteps], color = "90th Percentile")) +
+            scale_color_manual(values = c("black", "red", "purple", "blue", "green")) +
+            labs(x = "Period", y = "Impulse Response", title = paste0("Bootstrap of Response of ", variable_label[i], " to Composite ", shock_label[j], " Shock"))
+    }
+    
+    # Modify plotidiobootstrap function to include 10th and 90th percentile lines
+    OUR_plotidiobootstrap <- function(i, j) {
+        ggplot() +
+            geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realrunidio, pos1 = i, pos2 = j, cum = TRUE), color = "Point Estimate")) +
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(idioConfBandLwr, i, j), color = "Lower Confidence Band")) +
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(idioConfBandUpr, i, j), color = "Upper Confidence Band")) +
+            geom_line(aes(x = 1:maxIRsteps, y = idio_10th_percentile[i, j, 1:maxIRsteps], color = "10th Percentile")) +
+            geom_line(aes(x = 1:maxIRsteps, y = idio_90th_percentile[i, j, 1:maxIRsteps], color = "90th Percentile")) +
+            scale_color_manual(values = c("black", "red", "purple", "blue", "green")) +
+            labs(x = "Period", y = "Impulse Response", title = paste0("Bootstrap of Response of ", variable_label[i], " to Idiosyncratic ", shock_label[j], " Shock"))
+    }
     counter = 1
-
-    plotcommbootstrap = function(i,j)
-    {
-      ggplot()+
-        geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realruncommon, pos1 = i, pos2 = j, cum = T), color = paste0("Point Estimate of ", bootstrap_quantile*100, "-th Percentile")))+
-        geom_line(aes(x = 1:maxIRsteps, y = get_al(commConfBandLwr, i, j), color = paste0(conflevel[1]*100, "-th Confidence Band")))+
-        geom_line(aes(x = 1:maxIRsteps, y = get_al(commConfBandUpr, i, j), color = paste0(conflevel[2]*100, "-th Confidence Band")))+
-        scale_color_manual(name = "type", values = c("red","red","black"))+
-        labs(x = "Period", y = "Impulse Response",
-             title = paste0("Bootstrap of Response of ", variable_label[i], " to Common ", shock_label[j], " Shock"))
+    # Continue with your existing loop for plotting
+    for (i in 1:m) {
+        for (j in 1:m) {
+            OUR_commbootstrappane[[counter]] <- OUR_plotcommbootstrap(i, j)
+            OUR_compbootstrappane[[counter]] <- OUR_plotcompbootstrap(i, j)
+            OUR_idiobootstrappane[[counter]] <- OUR_plotidiobootstrap(i, j)
+            counter <- counter + 1
+        }
     }
 
-    plotcompbootstrap = function(i,j)
-    {
-      ggplot()+
-        geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realruncomp, pos1 = i, pos2 = j, cum = T), color = paste0("Point Estimate of ", bootstrap_quantile*100, "-th Percentile")))+
-        geom_line(aes(x = 1:maxIRsteps, y = get_al(compConfBandLwr, i, j), color = paste0(conflevel[1]*100, "-th Confidence Band")))+
-        geom_line(aes(x = 1:maxIRsteps, y = get_al(compConfBandUpr, i, j), color = paste0(conflevel[2]*100, "-th Confidence Band")))+
-        scale_color_manual(name = "type", values = c("red","red","black"))+
-        labs(x = "Period", y = "Impulse Response", title = paste0("Bootstrap of Response of ", variable_label[i], " to Composite ", shock_label[j], " Shock"))
-    }
+    ggsave("OUR_commbootstrappane.png", do.call("arrangeGrob", c(OUR_commbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+    ggsave("OUR_compbootstrappane.png", do.call("arrangeGrob", c(OUR_compbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+    ggsave("OUR_idiobootstrappane.png", do.call("arrangeGrob", c(OUR_idiobootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
 
-    plotidiobootstrap = function(i,j)
-    {
-      ggplot()+
-        geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realrunidio, pos1 = i, pos2 = j, cum = T), color = paste0("Point Estimate of ", bootstrap_quantile*100, "-th Percentile")))+
-        geom_line(aes(x = 1:maxIRsteps, y = get_al(idioConfBandLwr, i, j), color = paste0(conflevel[1]*100, "-th Confidence Band")))+
-        geom_line(aes(x = 1:maxIRsteps, y = get_al(idioConfBandUpr, i, j), color = paste0(conflevel[2]*100, "-th Confidence Band")))+
-        scale_color_manual(name = "type", values = c("red","red","black"))+
-        labs(x = "Period", y = "Impulse Response", title = paste0("Bootstrap of Response of ", variable_label[i], " to Idiosyncratic ", shock_label[j], " Shock"))
-    }
-    for (i in 1:m)
-    {
-      for (j in 1:m)
-      {
-        commbootstrappane[[counter]] = plotcommbootstrap(i,j)
-        compbootstrappane[[counter]] = plotcompbootstrap(i,j)
-        idiobootstrappane[[counter]] = plotidiobootstrap(i,j)
-        counter = counter+1
-      }
-    }
-# 
-#     ggsave("commbootstrappane.png", do.call("arrangeGrob", c(commbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
-#     ggsave("compbootstrappane.png", do.call("arrangeGrob", c(compbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
-#     ggsave("idiobootstrappane.png", do.call("arrangeGrob", c(idiobootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
-# 
 
     
 }
