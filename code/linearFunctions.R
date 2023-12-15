@@ -323,3 +323,52 @@ panelsvarbtsp = function(panel_list, type = "longrun", quantile, lagschosen = NA
   return(list(commQuantiles = commQuantiles, compQuantiles = compQuantiles, idioQuantiles = idioQuantiles))
 }
 
+panelsvarWithQuantiles <- function(panel_list, type = "longrun", maxlag, autolag = TRUE, lagschosen = NA, cslagschosen = NA, maxQ, quantile, levels = display_response_in_levels) {
+    n = length(panel_list)
+    m = ncol(panel_list[[1]])
+    t = nrow(panel_list[[1]]) # Assumes all panels have the same length
+    
+    # Choosing lags
+    if (autolag) {
+        lagschosen = sapply(panel_list, function(x) getAIC(x, maxlag))
+    }
+    
+    # Estimate SVAR for individual panels
+    panelsvars = mapply(function(dat, lag) calculateSVARFromData(dat, p = lag, maxQ = maxQ), panel_list, lagschosen, SIMPLIFY = FALSE)
+    panelstructures = lapply(panelsvars, makestructural, type = type)
+    
+    # Cross-sectional averages
+    csavg = sapply(panel_list, function(x) rowMeans(x, na.rm = TRUE))
+    if (autolag) {
+        cslagschosen = getAIC(as.data.frame(csavg), maxlag = maxlag)
+    }
+    cssvar = calculateSVARFromData(as.data.frame(csavg), p = cslagschosen, maxQ = maxQ)
+    csstructural = makestructural(cssvar, type = type)
+    
+    # Compute quantiles
+    commQuantiles = lapply(1:maxQ, matrix, data = NA, nrow = m, ncol = m)
+    compQuantiles = lapply(1:maxQ, matrix, data = NA, nrow = m, ncol = m)
+    idioQuantiles = lapply(1:maxQ, matrix, data = NA, nrow = m, ncol = m)
+    
+    # Quantile calculation loop
+    for(i in 1:m) {
+        for(j in 1:m) {
+            # Extract shocks and calculate quantiles
+            compPosQt = get_shocks(panelstructures, pos1 = i, pos2 = j, qt = quantile, cum = levels)
+            commPosQt = get_shocks(panelstructures, pos1 = i, pos2 = j, qt = quantile, cum = levels)
+            idioPosQt = get_shocks(panelstructures, pos1 = i, pos2 = j, qt = quantile, cum = levels)
+            
+            for(k in 1:maxQ) {
+                print(k)
+                commQuantiles[[k]][i, j] = commPosQt[k]
+                compQuantiles[[k]][i, j] = compPosQt[k]
+                idioQuantiles[[k]][i, j] = idioPosQt[k]
+            }
+        }
+    }
+    
+    # Return results
+    return(list(commQuantiles = commQuantiles, 
+                compQuantiles = compQuantiles, 
+                idioQuantiles = idioQuantiles))
+}

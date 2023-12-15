@@ -16,14 +16,14 @@ var_variables = c("lne","lnae") # read variables in order of recursivity if usin
 second_stage_variables = c() # column name of secondary regressor(s), if any. Leave as empty string, c(), if no secondary regression 
 panel_identifier = "country" # name of the unique identifier of panel members
 maxVARlag = 10 # the maximum number of lags to be considered in VAR estimation
-maxIRsteps = 20 # the value of Q+1, i.e., maximum impulse response horizon
+maxIRsteps = 16 # the value of Q+1, i.e., maximum impulse response horizon
 Ione = T # use T if var_variables are in I(1) unit root form (i.e., need to difference); F otherwise
 display_response_in_levels = Ione # default value is same as Ione; can overwrite with T/F
 structural_id_form = "longrun" # either "longrun" or "shortrun", for Cholesky decomposition of the long run or short run covariance matrix
 variable_label = c("lne", "lnae") # variable labels for the graphs. if no input, default as "variable1, variable2, ..."
 shock_label = c("Real","Nominal") # shock labels for the graphs. if no input, default as "shock1, shock2, ..."
 bootstrap = F # whether bootstrap intervals should be estimated
-  nreps = 20 # number of bootstrap iterations
+  nreps = 33 # number of bootstrap iterations
   bootstrap_quantile = 0.5 # which quantile point estimate would you like to see confidence bands around?
   conflevel = c(0.1, 0.9) # desired confidence level for bootstrap
   burnin = 100 # how many iterations before bootstrap kicks in
@@ -267,63 +267,56 @@ if (bootstrap) {
 # future work: how to bootstrap for unbalanced data
 
 # ------------------------------------ BLOCK BOOTSTRAP (OUR METHOD) ------------------------------------ #
+
 if (block_bootstrap) {
-  # Define the block size
-  block_size = 10 # [USER INPUT] choose the user's preferred block size
-  
-  # Initialize lists to store the bootstrapped quantiles
-  comm_qts = list()
-  comp_qts = list()
-  idio_qts = list()
-  
-  # Bootstrap for nreps iterations
-  for (bootstrap_iter in 1:nreps) {
-    print(paste0("BLOCK BOOTSTRAP bootstrap_iter: ", bootstrap_iter))
-    # Initialize a list to store bootstrapped panels
-    bootstrapped_panel = list()
+    # Define the block size (allow user input or default to 10)
+    block_size <- 10 # Replace this with user input mechanism if required
     
-    # Calculate the total number of blocks needed
-    num_blocks = ceiling(bigt / block_size)
-    print(paste0("NUMBER BLOCKS: ", num_blocks))
+    # Initialize lists to store the bootstrapped quantiles
+    comm_qts <- list()
+    comp_qts <- list()
+    idio_qts <- list()
     
-    # Sample start points for blocks (with replacement)
-    sampled_starts = sample(1:bigt - block_size, num_blocks, replace = TRUE)
-    print(paste0("sampled starts: ", sampled_starts))
-    
-    # Sample blocks for each country
-    for (country in names(balancedpanel)) {
-      print(paste0("COUNTRY ID: ", country))
-      # Create the bootstrapped sample for each country
-      # Loop over each start point in the sampled_starts list
-      bootstrapped_data = do.call(rbind, lapply(sampled_starts, function(start) {
-        end = min(start + block_size - 1, bigt)
-        return(balancedpanel[[country]][start:end, ])
-      }))
-      
-      print(paste0("bootstrapped_data: ", bootstrapped_data))
-      
-      # Store the bootstrapped data for each country
-      bootstrapped_panel[[country]] = bootstrapped_data
+    # Bootstrap for nreps iterations
+    for (bootstrap_iter in 1:nreps) {
+        bootstrapped_panel = list()
+        
+        # Calculate the total number of blocks needed
+        num_blocks <- ceiling(bigt / block_size)
+        
+        # Sample start points for blocks (with replacement)
+        sampled_starts <- sample(1:(bigt - block_size + 1), num_blocks, replace = TRUE)
+        
+        # Sample blocks for each country
+        for (country in names(balancedpanel)) {
+            
+            # Create the bootstrapped sample for each country
+            bootstrapped_data <- do.call(rbind, lapply(sampled_starts, function(start) {
+                end <- min(start + block_size - 1, bigt)
+                return(balancedpanel[[country]][start:end, ])
+            }))
+            
+            # Store the bootstrapped data for each country
+            bootstrapped_panel[[country]] <- bootstrapped_data
+        }
+       
+        # Perform panel SVAR on the bootstrapped panel 
+        bootstrapped_svar <- panelsvar(bootstrapped_panel,
+                                       maxQ = maxIRsteps,
+                                       maxlag = maxVARlag,
+                                       type = structural_id_form,
+                                       autolag = TRUE)
+        
+        # need to somehow get the median 
+        # Store the quantiles from bootstrapped SVAR
+        comm_qts[[bootstrap_iter]] <- bootstrapped_svar$commQuantiles
+        comp_qts[[bootstrap_iter]] <- bootstrapped_svar$compQuantiles
+        idio_qts[[bootstrap_iter]] <- bootstrapped_svar$idioQuantiles
     }
     
-    # Perform panel SVAR on the bootstrapped panel 
-    bootstrapped_svar = panelsvar(bootstrapped_panel,
-                                  maxQ = maxIRsteps,
-                                  maxlag = maxVARlag,
-                                  type = structural_id_form,
-                                  autolag = T)
-    # Store the quantiles from bootstrapped SVAR
-    comm_qts[[bootstrap_iter]] = bootstrapped_svar$commQuantiles
-    print("DEBUGGING FOR COMM_QTS \n")
-    print(bootstrapped_svar$commQuantiles) 
-    print("################################################")
-    comp_qts[[bootstrap_iter]] = bootstrapped_svar$compQuantiles
-    idio_qts[[bootstrap_iter]] = bootstrapped_svar$idioQuantiles }
-  
-  # Additional code to process and visualize the bootstrapped results...
-  # (similar to what you have done in the regular bootstrap section)
+    # Additional code to process and visualize the bootstrapped results...
+    # (Similar to what you have done in the regular bootstrap section)
 }
-
 
 #### TEST CASE NEEDED:
     
