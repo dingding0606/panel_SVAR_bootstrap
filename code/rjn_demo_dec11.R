@@ -23,10 +23,10 @@ structural_id_form = "longrun" # either "longrun" or "shortrun", for Cholesky de
 variable_label = c("lne", "lnae") # variable labels for the graphs. if no input, default as "variable1, variable2, ..."
 shock_label = c("Real","Nominal") # shock labels for the graphs. if no input, default as "shock1, shock2, ..."
 bootstrap = F # whether bootstrap intervals should be estimated
-  nreps = 33 # number of bootstrap iterations
+  nreps = 5 # number of bootstrap iterations
   bootstrap_quantile = 0.5 # which quantile point estimate would you like to see confidence bands around?
   conflevel = c(0.1, 0.9) # desired confidence level for bootstrap
-  burnin = 100 # how many iterations before bootstrap kicks in
+  burnin = 5 # how many iterations before bootstrap kicks in
 
 block_bootstrap = T
 
@@ -306,18 +306,54 @@ if (block_bootstrap) {
                                        maxlag = maxVARlag,
                                        type = structural_id_form,
                                        autolag = TRUE)
+
+
+        # Get quantiles for comm, comp, and idio
+        for (time in 1:maxIRsteps) {
+            
+            # Initialization -- start
+            list_of_country_IR_common <- vector("list", 2)
+            list_of_country_IR_comp <- vector("list", 2)
+            list_of_country_IR_idio <- vector("list", 2)
+            for (i in 1:2) {
+                # Initialize each inner list
+                list_of_country_IR_common[[i]] <- vector("list", 2)
+                list_of_country_IR_comp[[i]] <- vector("list", 2)
+                list_of_country_IR_idio[[i]] <- vector("list", 2)
+                for (j in 1:2) {
+                    # Initialize the list to hold the matrix elements
+                    list_of_country_IR_common[[i]][[j]] <- list()
+                    list_of_country_IR_comp[[i]][[j]] <- vector("list", 2)
+                    list_of_country_IR_idio[[i]][[j]] <- vector("list", 2)
+                }
+            }
+            # Initialization -- finish
+            
+            for (country_index in 1:length(balancedpanel)) {
+                
+                # Now go through elements in the 2x2 matrix
+                for(i in 1:2) {
+                    for (j in 1:2) {
+                        list_of_country_IR_common[[i]][[j]] <- c(list_of_country_IR_common[[i]][[j]], list(bootstrapped_svar$common[[country_index]][[time]][i, j]))
+                        list_of_country_IR_comp[[i]][[j]] <- c(list_of_country_IR_comp[[i]][[j]], list(bootstrapped_svar$composite[[country_index]][[time]][i, j]))
+                        list_of_country_IR_idio[[i]][[j]] <- c(list_of_country_IR_idio[[i]][[j]], list(bootstrapped_svar$idio[[country_index]][[time]][i, j]))
+                    }
+                }
+                
+            }
+            
+            # Store the quantiles from bootstrapped SVAR
+            for(i in 1:2) {
+                for (j in 1:2) {
+                    comm_qts[[bootstrap_iter]][[time]][[i]][[j]] <- median(unlist(list_of_country_IR_common[[i]][[j]])) # store 4 elements here
+                    comp_qts[[bootstrap_iter]][[time]][[i]][[j]] <- median(unlist(list_of_country_IR_comp[[i]][[j]])) # store 4 elements here
+                    idio_qts[[bootstrap_iter]][[time]][[i]][[j]] <- median(unlist(list_of_country_IR_idio[[i]][[j]])) # store 4 elements here
+                }
+            }
+        }
         
-        # need to somehow get the median 
-        # Store the quantiles from bootstrapped SVAR
-        comm_qts[[bootstrap_iter]] <- bootstrapped_svar$commQuantiles
-        comp_qts[[bootstrap_iter]] <- bootstrapped_svar$compQuantiles
-        idio_qts[[bootstrap_iter]] <- bootstrapped_svar$idioQuantiles
     }
     
-    # Additional code to process and visualize the bootstrapped results...
-    # (Similar to what you have done in the regular bootstrap section)
 }
 
-#### TEST CASE NEEDED:
-    
 
