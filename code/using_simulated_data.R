@@ -29,7 +29,7 @@ conflevel = c(0.1, 0.9) # desired confidence level for bootstrap
 burnin = 100 # how many iterations before bootstrap kicks in
 
 block_bootstrap = T
-random_choose_countries_in_bootstrap = T
+random_choose_countries_in_bootstrap = F
 
 ### perform any data manipulation here, such as taking the log or calculating the nominal exchange rate
 setwd(working_directory)
