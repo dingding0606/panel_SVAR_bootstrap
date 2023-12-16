@@ -16,17 +16,17 @@ var_variables = c("Var_1","Var_2") # read variables in order of recursivity if u
 second_stage_variables = c() # column name of secondary regressor(s), if any. Leave as empty string, c(), if no secondary regression 
 panel_identifier = "country" # name of the unique identifier of panel members
 maxVARlag = 10 # the maximum number of lags to be considered in VAR estimation
-maxIRsteps = 10 # the value of Q+1, i.e., maximum impulse response horizon
+maxIRsteps = 20 # the value of Q+1, i.e., maximum impulse response horizon
 Ione = T # use T if var_variables are in I(1) unit root form (i.e., need to difference); F otherwise
 display_response_in_levels = Ione # default value is same as Ione; can overwrite with T/F
 structural_id_form = "longrun" # either "longrun" or "shortrun", for Cholesky decomposition of the long run or short run covariance matrix
 variable_label = c("Var_1", "Var_2") # variable labels for the graphs. if no input, default as "variable1, variable2, ..."
 shock_label = c("shock 1","shock 2") # shock labels for the graphs. if no input, default as "shock1, shock2, ..."
-bootstrap = F # whether bootstrap intervals should be estimated
-nreps = 5 # number of bootstrap iterations
+bootstrap = T # whether bootstrap intervals should be estimated
+nreps = 30 # number of bootstrap iterations
 bootstrap_quantile = 0.5 # which quantile point estimate would you like to see confidence bands around?
 conflevel = c(0.1, 0.9) # desired confidence level for bootstrap
-burnin = 10 # how many iterations before bootstrap kicks in
+burnin = 50 # how many iterations before bootstrap kicks in
 
 block_bootstrap = T
 random_choose_countries_in_bootstrap = T
@@ -39,6 +39,54 @@ dat = read_xls(file_name)
 #dat = dat[complete.cases(dat),] # remove the three NAs in the end
 dat = dat %>% mutate(lne = Var_1,
                      lnae = Var_2)
+
+true_comp = read_csv("../data/IR_to_composite_shock_R_60.csv")
+true_comp_IR <- list()
+for (i in 1:2) {
+    temptempList <- list()
+    for (j in 1:2) {
+        tempList <- list()
+        for (k in 1:60) {
+            var_name <- paste("IR", i, j, "_", k, sep = "")
+            tempList[[k]] <- median(true_comp[[var_name]])
+        }
+        temptempList[[j]] <- tempList
+    }
+    true_comp_IR[[i]] <- temptempList
+}
+
+true_comm = read_csv("../data/IR_to_common_shock_R_60.csv")
+true_comm_IR <- list()
+for (i in 1:2) {
+    temptempList <- list()
+    for (j in 1:2) {
+        tempList <- list()
+        for (k in 1:60) {
+            var_name <- paste("IR", i, j, "_", k, sep = "")
+            tempList[[k]] <- median(true_comm[[var_name]])
+        }
+        temptempList[[j]] <- tempList
+    }
+    true_comm_IR[[i]] <- temptempList
+}
+
+true_idio = read_csv("../data/IR_to_idiosyncratic_shock_R_60.csv")
+true_idio_IR <- list()
+for (i in 1:2) {
+    temptempList <- list()
+    for (j in 1:2) {
+        tempList <- list()
+        for (k in 1:60) {
+            var_name <- paste("IR", i, j, "_", k, sep = "")
+            tempList[[k]] <- median(true_idio[[var_name]])
+        }
+        temptempList[[j]] <- tempList
+    }
+    true_idio_IR[[i]] <- temptempList
+}
+
+
+# I want true_comp_IR[1, 1] to store IR11_1 through IR11_60, true_comp_IR[1, 2] to store IR12_1 through IR11_60, and so on
 
 #########################################################################################################
 
@@ -436,11 +484,12 @@ if (block_bootstrap) {
     OUR_plotcommbootstrap <- function(i, j) {
         ggplot() +
             geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realruncommon, pos1 = i, pos2 = j, cum = TRUE), color = "Point Estimate")) +
-            geom_line(aes(x = 1:maxIRsteps, y = get_al(commConfBandLwr, i, j), color = "Lower Confidence Band")) +
-            geom_line(aes(x = 1:maxIRsteps, y = get_al(commConfBandUpr, i, j), color = "Upper Confidence Band")) +
-            geom_line(aes(x = 1:maxIRsteps, y = comm_10th_percentile[i, j, 1:maxIRsteps], color = "10th Percentile")) +
-            geom_line(aes(x = 1:maxIRsteps, y = comm_90th_percentile[i, j, 1:maxIRsteps], color = "90th Percentile")) +
-            scale_color_manual(values = c("black", "red", "purple", "blue", "green")) +
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(commConfBandLwr, i, j), color = "Lower Confidence Band (Sieve)")) +
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(commConfBandUpr, i, j), color = "Upper Confidence Band (Sieve)")) +
+            geom_line(aes(x = 1:maxIRsteps, y = comm_10th_percentile[i, j, 1:maxIRsteps], color = "Lower Confidence Band (Block)")) +
+            geom_line(aes(x = 1:maxIRsteps, y = comm_90th_percentile[i, j, 1:maxIRsteps], color = "Upper Confidence Band (Block)")) +
+            geom_line(aes(x = 1:maxIRsteps, y = unlist(true_comm_IR[[i]][[j]][1:maxIRsteps]), color = "True IR Curve (median)")) +
+            scale_color_manual(values = c("black", "red", "purple", "blue", "green", "darkgreen")) +
             labs(x = "Period", y = "Impulse Response", title = paste0("Bootstrap of Response of ", variable_label[i], " to Common ", shock_label[j], " Shock"))
     }
     
@@ -448,23 +497,26 @@ if (block_bootstrap) {
     OUR_plotcompbootstrap <- function(i, j) {
         ggplot() +
             geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realruncomp, pos1 = i, pos2 = j, cum = TRUE), color = "Point Estimate")) +
-            geom_line(aes(x = 1:maxIRsteps, y = get_al(compConfBandLwr, i, j), color = "Lower Confidence Band")) +
-            geom_line(aes(x = 1:maxIRsteps, y = get_al(compConfBandUpr, i, j), color = "Upper Confidence Band")) +
-            geom_line(aes(x = 1:maxIRsteps, y = comp_10th_percentile[i, j, 1:maxIRsteps], color = "10th Percentile")) +
-            geom_line(aes(x = 1:maxIRsteps, y = comp_90th_percentile[i, j, 1:maxIRsteps], color = "90th Percentile")) +
-            scale_color_manual(values = c("black", "red", "purple", "blue", "green")) +
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(compConfBandLwr, i, j), color = "Lower Confidence Band (Sieve)")) +
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(compConfBandUpr, i, j), color = "Upper Confidence Band (Sieve)")) +
+            geom_line(aes(x = 1:maxIRsteps, y = comp_10th_percentile[i, j, 1:maxIRsteps], color = "Lower Confidence Band (Block)")) +
+            geom_line(aes(x = 1:maxIRsteps, y = comp_90th_percentile[i, j, 1:maxIRsteps], color = "Upper Confidence Band (Block)")) +
+            geom_line(aes(x = 1:maxIRsteps, y = unlist(true_comp_IR[[i]][[j]][1:maxIRsteps]), color = "True IR Curve (median)")) +
+            scale_color_manual(values = c("black", "red", "purple", "blue", "green", "darkgreen")) +
             labs(x = "Period", y = "Impulse Response", title = paste0("Bootstrap of Response of ", variable_label[i], " to Composite ", shock_label[j], " Shock"))
     }
+    
     
     # Modify plotidiobootstrap function to include 10th and 90th percentile lines
     OUR_plotidiobootstrap <- function(i, j) {
         ggplot() +
             geom_line(aes(x = 1:maxIRsteps, y = get_shocks(realrunidio, pos1 = i, pos2 = j, cum = TRUE), color = "Point Estimate")) +
-            geom_line(aes(x = 1:maxIRsteps, y = get_al(idioConfBandLwr, i, j), color = "Lower Confidence Band")) +
-            geom_line(aes(x = 1:maxIRsteps, y = get_al(idioConfBandUpr, i, j), color = "Upper Confidence Band")) +
-            geom_line(aes(x = 1:maxIRsteps, y = idio_10th_percentile[i, j, 1:maxIRsteps], color = "10th Percentile")) +
-            geom_line(aes(x = 1:maxIRsteps, y = idio_90th_percentile[i, j, 1:maxIRsteps], color = "90th Percentile")) +
-            scale_color_manual(values = c("black", "red", "purple", "blue", "green")) +
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(idioConfBandLwr, i, j), color = "Lower Confidence Band (Sieve)")) +
+            geom_line(aes(x = 1:maxIRsteps, y = get_al(idioConfBandUpr, i, j), color = "Upper Confidence Band (Sieve)")) +
+            geom_line(aes(x = 1:maxIRsteps, y = idio_10th_percentile[i, j, 1:maxIRsteps], color = "Lower Confidence Band (Block)")) +
+            geom_line(aes(x = 1:maxIRsteps, y = idio_90th_percentile[i, j, 1:maxIRsteps], color = "Upper Confidence Band (Block)")) +
+            geom_line(aes(x = 1:maxIRsteps, y = unlist(true_idio_IR[[i]][[j]][1:maxIRsteps]), color = "True IR Curve (median)")) +
+            scale_color_manual(values = c("black", "red", "purple", "blue", "green", "darkgreen")) +
             labs(x = "Period", y = "Impulse Response", title = paste0("Bootstrap of Response of ", variable_label[i], " to Idiosyncratic ", shock_label[j], " Shock"))
     }
     counter = 1
@@ -479,8 +531,8 @@ if (block_bootstrap) {
     }
     
     ggsave(paste(random_choose_countries_in_bootstrap, "OUR_commbootstrappane.png"), do.call("arrangeGrob", c(OUR_commbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
-    ggsave(paste(random_choose_countries_in_bootstrap,"OUR_compbootstrappane.png"), do.call("arrangeGrob", c(OUR_compbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
-    ggsave(paste(random_choose_countries_in_bootstrap,"OUR_idiobootstrappane.png"), do.call("arrangeGrob", c(OUR_idiobootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+    ggsave(paste(random_choose_countries_in_bootstrap, "OUR_compbootstrappane.png"), do.call("arrangeGrob", c(OUR_compbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+    ggsave(paste(random_choose_countries_in_bootstrap, "OUR_idiobootstrappane.png"), do.call("arrangeGrob", c(OUR_idiobootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
     
     
     
