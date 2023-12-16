@@ -23,10 +23,10 @@ structural_id_form = "longrun" # either "longrun" or "shortrun", for Cholesky de
 variable_label = c("Var_1", "Var_2") # variable labels for the graphs. if no input, default as "variable1, variable2, ..."
 shock_label = c("shock 1","shock 2") # shock labels for the graphs. if no input, default as "shock1, shock2, ..."
 bootstrap = T # whether bootstrap intervals should be estimated
-nreps = 30 # number of bootstrap iterations
+nreps = 600 # number of bootstrap iterations
 bootstrap_quantile = 0.5 # which quantile point estimate would you like to see confidence bands around?
 conflevel = c(0.1, 0.9) # desired confidence level for bootstrap
-burnin = 50 # how many iterations before bootstrap kicks in
+burnin = 100 # how many iterations before bootstrap kicks in
 
 block_bootstrap = T
 random_choose_countries_in_bootstrap = T
