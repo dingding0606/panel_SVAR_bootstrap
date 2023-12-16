@@ -23,12 +23,13 @@ structural_id_form = "longrun" # either "longrun" or "shortrun", for Cholesky de
 variable_label = c("lne", "lnae") # variable labels for the graphs. if no input, default as "variable1, variable2, ..."
 shock_label = c("Real","Nominal") # shock labels for the graphs. if no input, default as "shock1, shock2, ..."
 bootstrap = T # whether bootstrap intervals should be estimated
-  nreps = 100 # number of bootstrap iterations
+  nreps = 300 # number of bootstrap iterations
   bootstrap_quantile = 0.5 # which quantile point estimate would you like to see confidence bands around?
   conflevel = c(0.1, 0.9) # desired confidence level for bootstrap
   burnin = 10 # how many iterations before bootstrap kicks in
 
 block_bootstrap = T
+random_choose_countries_in_bootstrap = T
 
 ### perform any data manipulation here, such as taking the log or calculating the nominal exchange rate
 setwd(working_directory)
@@ -208,6 +209,9 @@ if (bootstrap) {
   OUR_commbootstrappane = list()
   OUR_compbootstrappane = list()
   OUR_idiobootstrappane = list()
+  commbootstrappane = list()
+  compbootstrappane = list()
+  idiobootstrappane = list()
   counter = 1
 
   plotcommbootstrap = function(i,j)
@@ -269,6 +273,8 @@ if (bootstrap) {
 # ------------------------------------ BLOCK BOOTSTRAP (OUR METHOD) ------------------------------------ #
 
 if (block_bootstrap) {
+    original_country_list = names(balancedpanel)
+    
     # Define the block size (allow user input or default to 10)
     block_size <- 30 # Replace this with user input mechanism if required
     
@@ -280,6 +286,10 @@ if (block_bootstrap) {
     # Bootstrap for nreps iterations
     for (bootstrap_iter in 1:nreps) {
         bootstrapped_panel = list()
+        
+        if (random_choose_countries_in_bootstrap) {
+            country_list = sample(original_country_list, 10)
+        }
         
         # Initialize quantiles for each iteration
         for (time in 1:maxIRsteps) {
@@ -295,7 +305,7 @@ if (block_bootstrap) {
         sampled_starts <- sample(1:(bigt - block_size + 1), num_blocks, replace = TRUE)
         
         # Sample blocks for each country
-        for (country in names(balancedpanel)) {
+        for (country in country_list) {
             
             # Create the bootstrapped sample for each country
             bootstrapped_data <- do.call(rbind, lapply(sampled_starts, function(start) {
@@ -336,7 +346,7 @@ if (block_bootstrap) {
             }
             # Initialization -- finish
             
-            for (country_index in 1:length(balancedpanel)) {
+            for (country_index in 1:length(country_list)) {
                 
                 # Now go through elements in the 2x2 matrix
                 for(i in 1:2) {
@@ -468,9 +478,9 @@ if (block_bootstrap) {
         }
     }
 
-    ggsave("OUR_commbootstrappane.png", do.call("arrangeGrob", c(OUR_commbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
-    ggsave("OUR_compbootstrappane.png", do.call("arrangeGrob", c(OUR_compbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
-    ggsave("OUR_idiobootstrappane.png", do.call("arrangeGrob", c(OUR_idiobootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+    ggsave(paste(random_choose_countries_in_bootstrap, "OUR_commbootstrappane.png"), do.call("arrangeGrob", c(OUR_commbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+    ggsave(paste(random_choose_countries_in_bootstrap,"OUR_compbootstrappane.png"), do.call("arrangeGrob", c(OUR_compbootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
+    ggsave(paste(random_choose_countries_in_bootstrap,"OUR_idiobootstrappane.png"), do.call("arrangeGrob", c(OUR_idiobootstrappane, nrow = m)), width = 7*m, height = 7*(m-1))
 
 
     

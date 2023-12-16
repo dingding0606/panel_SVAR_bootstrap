@@ -21,7 +21,7 @@ library("dplyr")
 library("Matrix")
 library("openxlsx")
 
-testData <- read.csv("~/Desktop/R_code_demo_psvar_pedroni2013/IR_to_common_shock_R.csv") 
+testData <- read.csv("~/Desktop/ECON 371 Final Project/code/IR_to_common_shock_R.csv") 
 ##print(testData[, 1])
 ##colOfCountryIndex = testData[, 1]
 ##length(colOfCountryIndex)
@@ -482,6 +482,6 @@ writeDataIntoCSV = function(data, numberOfCountries, dimensionM, impulseResponse
     }
   }
   
-  write.csv(allData, "_countries_data.csv", row.names = FALSE)
+  write.csv(allData, "~/Desktop/ECON 371 Final Project/data/_countries_data.csv", row.names = FALSE)
 }
 writeDataIntoCSV(simulatedData, numberOfCountries = 20, dimensionM = 2,impulseResponseTotalPeriod= 20)
